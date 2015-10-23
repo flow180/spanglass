@@ -37,12 +37,11 @@ class SpanGlassController(CementBaseController):
     @expose(help='Create a new application w/ s3 buckets')
     def create(self):
         # pylint: disable=C0111
-        if not self.app.s3_conn:
-            try:
-                conn = self.app.S3Connection()
-            except boto.exception.NoAuthHandlerFound:
-                raise ValueError(
-                    'No credentials set up, run "aws configure" first')
+        try:
+            conn = self.app.S3Connection()
+        except boto.exception.NoAuthHandlerFound:
+            raise ValueError(
+                'No credentials set up, run "aws configure" first')
         name = raw_input('What is the name of your app? [%s] ' % (
             os.path.basename(os.getcwd()),)) or os.path.basename(os.getcwd())
         root = raw_input(
@@ -143,12 +142,11 @@ class SpanGlassController(CementBaseController):
         if dest_env not in ('development', 'staging', 'production'):
             raise ValueError(
                 'Invalid environment -- only development, staging, and production are available')
-        if not self.app.s3_conn:
-            try:
-                conn = self.app.S3Connection()
-            except boto.exception.NoAuthHandlerFound:
-                raise ValueError(
-                    'No credentials set up, run "aws configure" first')
+        try:
+            conn = self.app.S3Connection()
+        except boto.exception.NoAuthHandlerFound:
+            raise ValueError(
+                'No credentials set up, run "aws configure" first')
         source_bucket = conn.get_bucket(
             self.app.config.get('buckets', source_env))
         dest_bucket = conn.get_bucket(self.app.config.get('buckets', dest_env))
