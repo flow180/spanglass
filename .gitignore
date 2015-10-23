@@ -3,3 +3,5 @@ dist
 *.pyc
 *.egg-info
 __pycache__
+.cache
+.tox

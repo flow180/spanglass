@@ -37,11 +37,12 @@ class SpanGlassController(CementBaseController):
     @expose(help='Create a new application w/ s3 buckets')
     def create(self):
         # pylint: disable=C0111
-        try:
-            conn = self.app.S3Connection()
-        except boto.exception.NoAuthHandlerFound:
-            raise ValueError(
-                'No credentials set up, run "aws configure" first')
+        if not self.app.s3_conn:
+            try:
+                conn = self.app.S3Connection()
+            except boto.exception.NoAuthHandlerFound:
+                raise ValueError(
+                    'No credentials set up, run "aws configure" first')
         name = raw_input('What is the name of your app? [%s] ' % (
             os.path.basename(os.getcwd()),)) or os.path.basename(os.getcwd())
         root = raw_input(
@@ -108,7 +109,7 @@ class SpanGlassController(CementBaseController):
         try:
             bucket = self.app.config.get('buckets', env)
             self.__deploy_to_bucket(
-                bucket, self.app.config.get('files', 'root'))
+                bucket, self.app.config.get('files', 'root'), env)
         except configparser.NoSectionError:
             raise ValueError(
                 "No config file. Try running spanglass init or spanglass create first.")
@@ -142,11 +143,12 @@ class SpanGlassController(CementBaseController):
         if dest_env not in ('development', 'staging', 'production'):
             raise ValueError(
                 'Invalid environment -- only development, staging, and production are available')
-        try:
-            conn = self.app.S3Connection()
-        except boto.exception.NoAuthHandlerFound:
-            raise ValueError(
-                'No credentials set up, run "aws configure" first')
+        if not self.app.s3_conn:
+            try:
+                conn = self.app.S3Connection()
+            except boto.exception.NoAuthHandlerFound:
+                raise ValueError(
+                    'No credentials set up, run "aws configure" first')
         source_bucket = conn.get_bucket(
             self.app.config.get('buckets', source_env))
         dest_bucket = conn.get_bucket(self.app.config.get('buckets', dest_env))
@@ -155,7 +157,8 @@ class SpanGlassController(CementBaseController):
                               (key.key, source_env, dest_env))
             existing_key = dest_bucket.get_key(key.key)
             if existing_key:
-                source_hash = source_bucket.get_key(key.key).get_metadata('hash')
+                source_hash = source_bucket.get_key(
+                    key.key).get_metadata('hash')
                 dest_hash = existing_key.get_metadata('hash')
                 if source_hash == dest_hash:
                     self.app.log.info(
@@ -163,13 +166,21 @@ class SpanGlassController(CementBaseController):
                     continue
                 else:
                     dest_bucket.delete_key(key.key)
-            dest_bucket.copy_key(key.key, source_bucket.name, key.key)
+            mime = mimetypes.guess_type(key.key)[0]
+            options = {'Content-Type': mime}
+            if dest_env != 'production':
+                options['X-Robots-Tag'] = 'noindex'
+            else:
+                options['X-Robots-Tag'] = 'all'
+            dest_bucket.copy_key(key.key, source_bucket.name,
+                                 key.key, headers=options)
+
         for key in dest_bucket.get_all_keys():
             if key.key not in [src_key.key for src_key in source_bucket.get_all_keys()]:
                 key.delete()
         print("Promoted %s to %s" % (source_env, dest_env))
 
-    def __deploy_to_bucket(self, bucket_name, deploy_dir):
+    def __deploy_to_bucket(self, bucket_name, deploy_dir, env):
         # pylint: disable=C0111
         try:
             conn = self.app.S3Connection()
@@ -192,7 +203,6 @@ class SpanGlassController(CementBaseController):
         for filename in fileset:
             src_path = filename
             dst_path = os.path.relpath(filename, deploy_dir)
-            mime = mimetypes.guess_type(filename)[0]
             with open(filename, 'rb') as src_fh:
                 source_hash = hashlib.sha512(src_fh.read()).hexdigest()
             existing_key = bucket.get_key(dst_path)
@@ -204,14 +214,19 @@ class SpanGlassController(CementBaseController):
                     self.app.log.info('Skipping %s - no change' % (dst_path,))
                     keys_done.append(dst_path)
                     continue
-            self.app.log.info('Uploading %s with mime %s' %
-                              (dst_path, mime,))
+            self.app.log.info('Uploading %s' % (dst_path,))
             s3_file = boto.s3.key.Key(bucket)
             s3_file.key = dst_path
             keys_done.append(s3_file.key)
             s3_file.set_metadata('hash', source_hash)
+            mime = mimetypes.guess_type(filename)[0]
+            options = {'Content-Type': mime}
+            if env != 'production':
+                options['X-Robots-Tag'] = 'noindex'
+            else:
+                options['X-Robots-Tag'] = 'all'
             s3_file.set_contents_from_filename(
-                src_path, {"Content-Type": mime})
+                src_path, options)
             s3_file.set_acl('public-read')
         all_keys = bucket.list()
         to_delete = list(set([key.key for key in all_keys]) - set(keys_done))
