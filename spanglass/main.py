@@ -27,6 +27,8 @@ class SpanGlassController(CementBaseController):
         arguments = [
             (['extra_arguments'],
              dict(action='store', nargs='*')),
+            (['--force'],
+             dict(action='store_true')),
         ]
 
     @expose(hide=True)
@@ -158,7 +160,7 @@ class SpanGlassController(CementBaseController):
                 source_hash = source_bucket.get_key(
                     key.key).get_metadata('hash')
                 dest_hash = existing_key.get_metadata('hash')
-                if source_hash == dest_hash:
+                if source_hash == dest_hash and not self.app.pargs.force:
                     self.app.log.info(
                         '%s exists and is current, skipping' % (key.key,))
                     continue
@@ -170,8 +172,11 @@ class SpanGlassController(CementBaseController):
                 options['X-Robots-Tag'] = 'noindex'
             else:
                 options['X-Robots-Tag'] = 'all'
+            metadata = dict(hash=source_bucket.get_key(
+                key.key).get_metadata('hash'))
+            metadata['x-robots-tag'] = options['X-Robots-Tag']
             dest_bucket.copy_key(key.key, source_bucket.name,
-                                 key.key, headers=options)
+                                 key.key, headers=options, metadata=metadata, preserve_acl=True)
 
         for key in dest_bucket.get_all_keys():
             if key.key not in [src_key.key for src_key in source_bucket.get_all_keys()]:
@@ -206,7 +211,7 @@ class SpanGlassController(CementBaseController):
             existing_key = bucket.get_key(dst_path)
             if existing_key:
                 remote_hash = existing_key.get_metadata('hash')
-                if source_hash != remote_hash:
+                if source_hash != remote_hash and not self.app.pargs.force:
                     bucket.delete_key(dst_path)
                 else:
                     self.app.log.info('Skipping %s - no change' % (dst_path,))
