@@ -6,7 +6,7 @@ import os
 
 setup(
     name='spanglass',
-    version='0.0.1',
+    version='0.0.2',
     description='Static site deployment tool',
     install_requires = ['six', 'formic', 'cement', 'boto'],
     platforms='Platform Independent',

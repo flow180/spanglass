@@ -126,7 +126,8 @@ class SpanGlassController(CementBaseController):
             root = self.app.config.get('files', 'root')
         except configparser.Error:
             pass
-        http_server = ThreadingHTTPServer(port=port, serve_path=root)
+        http_server = ThreadingHTTPServer(port=port, serve_path=root, clean_urls=self.app.config.has_option(
+            'files', 'clean_urls') and self.app.config.getboolean('files', 'clean_urls'))
         print("Listening on %d" % (port,))
         http_server.serve_forever()
 
@@ -166,8 +167,7 @@ class SpanGlassController(CementBaseController):
                     continue
                 else:
                     dest_bucket.delete_key(key.key)
-            mime = mimetypes.guess_type(key.key)[0]
-            options = {'Content-Type': mime}
+            options = dict()
             if dest_env != 'production':
                 options['X-Robots-Tag'] = 'noindex'
             else:
@@ -176,7 +176,7 @@ class SpanGlassController(CementBaseController):
                 key.key).get_metadata('hash'))
             metadata['x-robots-tag'] = options['X-Robots-Tag']
             dest_bucket.copy_key(key.key, source_bucket.name,
-                                 key.key, headers=options, metadata=metadata, preserve_acl=True)
+                                 key.key, metadata=metadata, preserve_acl=True)
 
         for key in dest_bucket.get_all_keys():
             if key.key not in [src_key.key for src_key in source_bucket.get_all_keys()]:
@@ -223,6 +223,8 @@ class SpanGlassController(CementBaseController):
             keys_done.append(s3_file.key)
             s3_file.set_metadata('hash', source_hash)
             mime = mimetypes.guess_type(filename)[0]
+            if not mime and self.app.config.has_option('files', 'clean_urls') and self.app.config.getboolean('files', 'clean_urls') and os.path.splitext(filename)[1] == '':
+                mime = 'text/html'
             options = {'Content-Type': mime}
             if env != 'production':
                 options['X-Robots-Tag'] = 'noindex'

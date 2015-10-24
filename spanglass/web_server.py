@@ -18,7 +18,7 @@ import re
 class RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
     """ Handler to handle POST requests for actions.
     """
-
+    clean_urls = False
     serve_path = None
     range_from = None
     range_to = None
@@ -71,13 +71,13 @@ class RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
                 if os.path.exists(index):
                     path = index
                     break
-
+        ctype = self.guess_type(path)
         if not os.path.exists(path) and path.endswith('/data'):
             # stupid grits
             if os.path.exists(path[:-5]):
                 path = path[:-5]
-
-        ctype = self.guess_type(path)
+        if os.path.splitext(path)[1] == '' and self.clean_urls and not os.path.exists(path) and os.path.exists(path + '.html'):
+            path = path + '.html'
         try:
             # Always read in binary mode. Opening files in text mode may cause
             # newline translations, making the actual size of the content
@@ -154,7 +154,8 @@ class RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
 class ThreadingHTTPServer(ThreadingMixIn, BaseHTTPServer.HTTPServer):
     """ Combine ThreadingMixin and BaseHTTPServer """
 
-    def __init__(self, port, serve_path='.'):
+    def __init__(self, port, serve_path='.', clean_urls=False):
         handler = RequestHandler
         handler.serve_path = serve_path
+        handler.clean_urls = clean_urls
         BaseHTTPServer.HTTPServer.__init__(self, ("", port), handler)
