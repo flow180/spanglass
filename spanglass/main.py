@@ -219,6 +219,8 @@ class SpanGlassController(CementBaseController):
                     continue
             self.app.log.info('Uploading %s' % (dst_path,))
             s3_file = boto.s3.key.Key(bucket)
+            if dst_path.endswith('.html') and self.app.config.has_option('files', 'clean_urls') and self.app.config.getboolean('files', 'clean_urls') and os.path.splitext(filename)[1] == '':
+                dst_path = dst_path[0:-5]            
             s3_file.key = dst_path
             keys_done.append(s3_file.key)
             s3_file.set_metadata('hash', source_hash)

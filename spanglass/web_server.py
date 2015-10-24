@@ -25,6 +25,8 @@ class RequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         """ Overridden to handle HTTP Range requests. """
+        if os.path.splitext(self.path)[1] == '' and self.clean_urls and not os.path.exists(self.translate_path(self.path)) and os.path.exists(self.translate_path(self.path) + '.html'):
+            self.path = self.path + '.html'
         self.range_from, self.range_to = self._get_range_header()
         if self.range_from is None:
             # nothing to do here
@@ -158,4 +160,6 @@ class ThreadingHTTPServer(ThreadingMixIn, BaseHTTPServer.HTTPServer):
         handler = RequestHandler
         handler.serve_path = serve_path
         handler.clean_urls = clean_urls
+        if clean_urls: 
+             handler.extensions_map[''] = 'text/html'
         BaseHTTPServer.HTTPServer.__init__(self, ("", port), handler)
