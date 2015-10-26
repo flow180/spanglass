@@ -206,6 +206,8 @@ class SpanGlassController(CementBaseController):
         for filename in fileset:
             src_path = filename
             dst_path = os.path.relpath(filename, deploy_dir)
+            if dst_path != "index.html" and not dst_path.endswith('/index.html') and dst_path.endswith('.html') and self.app.config.has_option('files', 'clean_urls') and self.app.config.getboolean('files', 'clean_urls'):
+                dst_path = dst_path[0:-5]            
             with open(filename, 'rb') as src_fh:
                 source_hash = hashlib.sha512(src_fh.read()).hexdigest()
             existing_key = bucket.get_key(dst_path)
@@ -219,8 +221,6 @@ class SpanGlassController(CementBaseController):
                     continue
             self.app.log.info('Uploading %s' % (dst_path,))
             s3_file = boto.s3.key.Key(bucket)
-            if dst_path.endswith('.html') and self.app.config.has_option('files', 'clean_urls') and self.app.config.getboolean('files', 'clean_urls') and os.path.splitext(filename)[1] == '':
-                dst_path = dst_path[0:-5]            
             s3_file.key = dst_path
             keys_done.append(s3_file.key)
             s3_file.set_metadata('hash', source_hash)
